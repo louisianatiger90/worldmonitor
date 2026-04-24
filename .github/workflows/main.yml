@@ -1,0 +1,48 @@
+name: Invicti Source Scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  source-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Create output directory
+        run: |
+          mkdir -p output
+          chmod 777 output
+
+      - name: Login to Invicti Registry
+        run: |
+          echo "${{ secrets.INVICTI_REGISTRY_PASSWORD }}" | docker login registry.invicti.com \
+            -u "${{ secrets.INVICTI_REGISTRY_USERNAME }}" \
+            --password-stdin
+
+      - name: Pull Invicti Source Scan image
+        run: docker pull registry.invicti.com/invicti-platform/invicti-source-scan:latest
+
+      - name: Run Invicti Source Scan
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/code:ro \
+            -v "${{ github.workspace }}/output":/output \
+            -e INVICTI_SYNC=true \
+            -e INVICTI_JWT_TOKEN="${{ secrets.INVICTI_JWT_TOKEN }}" \
+            -e LOG_LEVEL=debug \
+            registry.invicti.com/invicti-platform/invicti-source-scan:latest
+
+      - name: List output files
+        if: always()
+        run: |
+          ls -lah output || true
+
+      - name: Upload output artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: invicti-source-scan-output
+          path: output/
